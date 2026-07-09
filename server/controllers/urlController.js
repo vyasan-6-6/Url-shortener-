@@ -230,3 +230,96 @@ export const redirectToOriginal = async (req, res, next) => {
     next(error);
   }
 };
+
+/**
+ * @desc    Delete a URL (Soft Delete)
+ * @route   DELETE /urls/:id
+ * @access  Private (Requires Authentication)
+ */
+export const deleteUrl = async (req, res, next) => {
+  const { id } = req.params;
+
+  try {
+    const url = await Url.findById(id);
+
+    if (!url) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'URL mapping not found'
+      });
+    }
+
+    // Authorization: Check ownership
+    if (url.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'You are not authorized to delete this URL'
+      });
+    }
+
+    // Soft delete: set isDeleted to true
+    url.isDeleted = true;
+    await url.save();
+
+    res.status(200).json({
+      status: 'success',
+      message: 'URL deleted successfully'
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Update destination URL
+ * @route   PUT /urls/:id
+ * @access  Private (Requires Authentication)
+ */
+export const updateUrl = async (req, res, next) => {
+  const { id } = req.params;
+  const { originalUrl } = req.body;
+
+  try {
+    if (!originalUrl) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide the new original destination URL'
+      });
+    }
+
+    if (!isValidUrl(originalUrl)) {
+      return res.status(400).json({
+        status: 'error',
+        message: 'Please provide a valid URL starting with http:// or https://'
+      });
+    }
+
+    const url = await Url.findById(id);
+
+    if (!url || url.isDeleted) {
+      return res.status(404).json({
+        status: 'error',
+        message: 'URL mapping not found'
+      });
+    }
+
+    // Authorization: Check ownership
+    if (url.userId.toString() !== req.user._id.toString()) {
+      return res.status(403).json({
+        status: 'error',
+        message: 'You are not authorized to modify this URL'
+      });
+    }
+
+    // Update fields
+    url.originalUrl = originalUrl;
+    await url.save();
+
+    res.status(200).json({
+      status: 'success',
+      data: url
+    });
+  } catch (error) {
+    next(error);
+  }
+};

@@ -1,5 +1,5 @@
 import express from 'express';
-import { createShortUrl, getUserUrls } from '../controllers/urlController.js';
+import { createShortUrl, getUserUrls, updateUrl, deleteUrl } from '../controllers/urlController.js';
 import { protect } from '../middlewares/authMiddleware.js';
 
 const router = express.Router();
@@ -9,5 +9,7 @@ router.use(protect); // Applies the 'protect' middleware to all routes defined b
 
 router.post('/', createShortUrl);
 router.get('/', getUserUrls);
+router.put('/:id', updateUrl);
+router.delete('/:id', deleteUrl);
 
 export default router;
