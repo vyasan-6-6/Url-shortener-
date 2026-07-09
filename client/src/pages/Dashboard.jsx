@@ -137,11 +137,42 @@ function Dashboard() {
     return new Date(expiresAtString) < new Date();
   };
 
-  // Delete handler
+  // Delete handler using custom interactive toast confirmation
   const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this link?')) {
-      deleteMutation.mutate(id);
-    }
+    toast((t) => (
+      <div className="flex flex-col space-y-3 bg-slate-900 border border-slate-800 text-slate-100 p-4.5 rounded-2xl shadow-[0_15px_30px_rgba(0,0,0,0.5)] max-w-xs backdrop-blur-md">
+        <div className="flex items-center space-x-2.5">
+          <span className="text-rose-500 text-base animate-pulse">⚠️</span>
+          <span className="text-xs font-semibold tracking-wide text-slate-200">Delete this link permanently?</span>
+        </div>
+        <div className="flex justify-end space-x-2 pt-1.5">
+          <button
+            onClick={() => {
+              toast.dismiss(t.id);
+              deleteMutation.mutate(id);
+            }}
+            className="px-3.5 py-1.5 bg-rose-600 hover:bg-rose-500 text-white text-[10px] font-bold rounded-lg transition hover:shadow-[0_0_10px_rgba(244,63,94,0.35)] cursor-pointer"
+          >
+            Delete
+          </button>
+          <button
+            onClick={() => toast.dismiss(t.id)}
+            className="px-3.5 py-1.5 bg-slate-800 hover:bg-slate-750 text-slate-400 hover:text-white text-[10px] font-bold rounded-lg transition border border-slate-700 cursor-pointer"
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    ), {
+      duration: 6000,
+      position: 'top-center',
+      style: {
+        background: 'transparent',
+        border: 'none',
+        boxShadow: 'none',
+        padding: 0
+      }
+    });
   };
 
   // Edit Handlers
