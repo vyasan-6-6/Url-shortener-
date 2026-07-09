@@ -26,6 +26,8 @@ function Dashboard() {
   // UI States
   const [copiedCode, setCopiedCode] = useState('');
   const [showAdvanced, setShowAdvanced] = useState(false);
+  const [editingId, setEditingId] = useState(null);
+  const [editUrlValue, setEditUrlValue] = useState('');
 
   // 1. React Query: Fetch URLs
   const { data: urlData, isLoading, isError, refetch } = useQuery({
@@ -55,6 +57,36 @@ function Dashboard() {
     onError: (error) => {
       const errMsg = error.response?.data?.message || 'Failed to create short URL';
       toast.error(errMsg);
+    }
+  });
+
+  // 3. React Query: Delete URL Mutation
+  const deleteMutation = useMutation({
+    mutationFn: async (id) => {
+      await axios.delete(`${API_URL}/urls/${id}`);
+    },
+    onSuccess: () => {
+      toast.success('Link deleted successfully');
+      queryClient.invalidateQueries(['urls']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to delete link');
+    }
+  });
+
+  // 4. React Query: Edit URL Mutation
+  const editMutation = useMutation({
+    mutationFn: async ({ id, originalUrl }) => {
+      await axios.put(`${API_URL}/urls/${id}`, { originalUrl });
+    },
+    onSuccess: () => {
+      toast.success('Link updated successfully');
+      setEditingId(null);
+      setEditUrlValue('');
+      queryClient.invalidateQueries(['urls']);
+    },
+    onError: (error) => {
+      toast.error(error.response?.data?.message || 'Failed to update link');
     }
   });
 
@@ -95,6 +127,27 @@ function Dashboard() {
   const isExpired = (expiresAtString) => {
     if (!expiresAtString) return false;
     return new Date(expiresAtString) < new Date();
+  };
+
+  // Delete handler
+  const handleDelete = (id) => {
+    if (window.confirm('Are you sure you want to delete this link?')) {
+      deleteMutation.mutate(id);
+    }
+  };
+
+  // Edit Handlers
+  const handleEditStart = (id, currentUrl) => {
+    setEditingId(id);
+    setEditUrlValue(currentUrl);
+  };
+
+  const handleEditSubmit = (id) => {
+    if (!editUrlValue) {
+      toast.error('URL cannot be empty');
+      return;
+    }
+    editMutation.mutate({ id, originalUrl: editUrlValue });
   };
 
   return (
@@ -273,9 +326,35 @@ function Dashboard() {
                           )}
                         </div>
                         
-                        <p className="text-xs text-slate-450 truncate" title={url.originalUrl}>
-                          {url.originalUrl}
-                        </p>
+                        {editingId === url._id ? (
+                          <form onSubmit={(e) => { e.preventDefault(); handleEditSubmit(url._id); }} className="flex items-center space-x-2 w-full pt-1">
+                            <input
+                              type="text"
+                              value={editUrlValue}
+                              onChange={(e) => setEditUrlValue(e.target.value)}
+                              className="flex-grow bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-lg py-1.5 px-3 text-xs text-slate-100"
+                              placeholder="New destination URL..."
+                            />
+                            <button
+                              type="submit"
+                              disabled={editMutation.isLoading}
+                              className="px-3 py-1.5 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-semibold disabled:opacity-50 transition"
+                            >
+                              Save
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setEditingId(null)}
+                              className="px-3 py-1.5 bg-slate-850 hover:bg-slate-800 text-slate-400 rounded-lg text-xs font-semibold transition"
+                            >
+                              Cancel
+                            </button>
+                          </form>
+                        ) : (
+                          <p className="text-xs text-slate-450 truncate" title={url.originalUrl}>
+                            {url.originalUrl}
+                          </p>
+                        )}
 
                         <div className="flex items-center space-x-4 text-[10px] text-slate-500 font-medium">
                           <span className="flex items-center">
@@ -326,6 +405,7 @@ function Dashboard() {
 
                         {/* Edit Link Button */}
                         <button
+                          onClick={() => handleEditStart(url._id, url.originalUrl)}
                           className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
                           title="Edit Link"
                         >
@@ -334,7 +414,9 @@ function Dashboard() {
 
                         {/* Delete Link Button */}
                         <button
-                          className="p-2 bg-red-950/20 hover:bg-red-900/35 border border-red-900/30 text-red-400 hover:text-red-300 rounded-lg transition"
+                          onClick={() => handleDelete(url._id)}
+                          disabled={deleteMutation.isLoading}
+                          className="p-2 bg-red-950/20 hover:bg-red-900/35 border border-red-900/30 text-red-400 hover:text-red-300 rounded-lg transition disabled:opacity-40"
                           title="Delete Link"
                         >
                           <Trash2 className="w-4 h-4" />
