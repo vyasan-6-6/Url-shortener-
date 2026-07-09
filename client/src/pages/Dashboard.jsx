@@ -31,6 +31,8 @@ function Dashboard() {
   const [activeQrUrl, setActiveQrUrl] = useState(null);
   const [activeQrCode, setActiveQrCode] = useState('');
   const [loadingQrId, setLoadingQrId] = useState(null);
+  const [aiSuggestions, setAiSuggestions] = useState([]);
+  const [generatingAliases, setGeneratingAliases] = useState(false);
 
   // 1. React Query: Fetch URLs
   const { data: urlData, isLoading, isError, refetch } = useQuery({
@@ -170,6 +172,28 @@ function Dashboard() {
     }
   };
 
+  // AI Alias Suggestion handler
+  const handleGenerateAiAliases = async () => {
+    if (!originalUrl) {
+      toast.error('Please enter a destination URL first');
+      return;
+    }
+    setGeneratingAliases(true);
+    setAiSuggestions([]);
+    try {
+      const response = await axios.post(`${API_URL}/ai/aliases`, { originalUrl });
+      if (response.data.status === 'success') {
+        setAiSuggestions(response.data.data);
+        toast.success('AI suggestions loaded!');
+      }
+    } catch (error) {
+      console.error('AI alias error:', error);
+      toast.error('Failed to generate AI alias suggestions');
+    } finally {
+      setGeneratingAliases(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
       {/* Premium Navbar */}
@@ -254,8 +278,18 @@ function Dashboard() {
             {/* Advanced Inputs Container */}
             {showAdvanced && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50 animate-fadeIn">
-                <div className="space-y-1">
-                  <label className="text-xs font-semibold text-slate-350">Custom Alias (Optional)</label>
+                <div className="space-y-2">
+                  <div className="flex justify-between items-center">
+                    <label className="text-xs font-semibold text-slate-350">Custom Alias (Optional)</label>
+                    <button
+                      type="button"
+                      onClick={handleGenerateAiAliases}
+                      disabled={generatingAliases || !originalUrl}
+                      className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold transition disabled:opacity-40 cursor-pointer"
+                    >
+                      {generatingAliases ? 'AI Suggesting...' : 'AI Suggest'}
+                    </button>
+                  </div>
                   <input
                     type="text"
                     placeholder="e.g. my-portfolio"
@@ -263,6 +297,23 @@ function Dashboard() {
                     onChange={(e) => setCustomAlias(e.target.value)}
                     className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 px-3.5 text-xs text-slate-100"
                   />
+                  {aiSuggestions.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      {aiSuggestions.map((sug, idx) => (
+                        <button
+                          key={idx}
+                          type="button"
+                          onClick={() => {
+                            setCustomAlias(sug);
+                            setAiSuggestions([]);
+                          }}
+                          className="text-[9px] bg-violet-950/40 hover:bg-violet-900/60 border border-violet-900/50 text-violet-300 px-2 py-0.5 rounded-full transition cursor-pointer"
+                        >
+                          {sug}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="space-y-1">
                   <label className="text-xs font-semibold text-slate-350">Expiration Date (Optional)</label>
