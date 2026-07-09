@@ -345,7 +345,9 @@ function Dashboard() {
                       type="datetime-local"
                       value={expiresAt}
                       onChange={(e) => setExpiresAt(e.target.value)}
-                      className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 px-3.5 text-xs text-slate-100 text-left"
+                      onClick={(e) => { try { e.target.showPicker(); } catch (_) {} }}
+                      onFocus={(e) => { try { e.target.showPicker(); } catch (_) {} }}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 px-3.5 text-xs text-slate-100 text-left cursor-pointer"
                     />
                   </div>
                 </div>
