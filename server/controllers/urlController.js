@@ -1,5 +1,7 @@
 import Url from '../models/Url.js';
+import Click from '../models/Click.js';
 import { generateShortCode } from '../utils/generateShortCode.js';
+import useragent from 'useragent';
 
 /**
  * Helper to validate URL structure
@@ -159,6 +161,71 @@ export const getUserUrls = async (req, res, next) => {
       },
       data: urls
     });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * @desc    Redirect short URL to original destination & log click analytics
+ * @route   GET /:shortCode
+ * @access  Public
+ */
+export const redirectToOriginal = async (req, res, next) => {
+  const { shortCode } = req.params;
+
+  try {
+    // 1. Database Lookup: find the URL that is not deleted
+    const url = await Url.findOne({ shortCode, isDeleted: false });
+
+    // 2. Fallback: if URL does not exist
+    if (!url) {
+      // Redirect to the client-side 404 page
+      return res.redirect(`${process.env.CLIENT_URL || 'http://localhost:5173'}/404`);
+    }
+
+    // 3. Conditional Check: check if URL has expired
+    if (url.expiresAt && new Date(url.expiresAt) < new Date()) {
+      return res.status(410).send(`
+        <html>
+          <head>
+            <title>Link Expired</title>
+            <style>
+              body { background-color: #0f172a; color: #f8fafc; font-family: sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+              .card { background-color: #1e293b; border: 1px solid #334155; padding: 2rem; border-radius: 1rem; text-align: center; max-width: 400px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3); }
+              h1 { color: #f43f5e; margin-top: 0; }
+              p { color: #94a3b8; font-size: 0.95rem; line-height: 1.5; }
+            </style>
+          </head>
+          <body>
+            <div class="card">
+              <h1>Link Expired</h1>
+              <p>This shortened URL has expired on ${new Date(url.expiresAt).toLocaleString()} and is no longer active.</p>
+            </div>
+          </body>
+        </html>
+      `);
+    }
+
+    // 4. Atomic Update: Increment clicks in database using MongoDB $inc operator
+    await Url.findByIdAndUpdate(url._id, { $inc: { clicks: 1 } });
+
+    // 5. Gather analytical details from request headers
+    const agent = useragent.parse(req.headers['user-agent'] || '');
+    const browser = agent.family || 'Unknown';
+    const ip = req.ip || req.headers['x-forwarded-for'] || 'Unknown';
+    const referrer = req.headers['referer'] || 'Direct';
+
+    // 6. Asynchronously save click analytics to database (non-blocking)
+    Click.create({
+      urlId: url._id,
+      browser,
+      ip,
+      referrer
+    }).catch((err) => console.error('Click logging error:', err));
+
+    // 7. HTTP Redirect: 302 Temporary Redirect to the original URL
+    return res.redirect(302, url.originalUrl);
   } catch (error) {
     next(error);
   }
