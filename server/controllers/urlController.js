@@ -3,6 +3,7 @@ import Click from '../models/Click.js';
 import { generateShortCode } from '../utils/generateShortCode.js';
 import useragent from 'useragent';
 import QRCode from 'qrcode';
+import { checkUrlSafety } from '../services/aiService.js';
 
 /**
  * Helper to validate URL structure
@@ -37,6 +38,15 @@ export const createShortUrl = async (req, res, next) => {
       return res.status(400).json({
         status: 'error',
         message: 'Please provide a valid URL starting with http:// or https://'
+      });
+    }
+
+    // AI Safety Check: analyze original URL for security threats
+    const safetyCheck = await checkUrlSafety(originalUrl);
+    if (!safetyCheck.isSafe) {
+      return res.status(400).json({
+        status: 'error',
+        message: `AI Safety Shield: ${safetyCheck.reason}`
       });
     }
 
