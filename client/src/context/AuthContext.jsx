@@ -1,5 +1,4 @@
 import React, { createContext, useState, useEffect, useContext } from 'react';
-import axios from 'axios';
 
 // Create the Context
 const AuthContext = createContext(null);
@@ -21,9 +20,6 @@ export const AuthProvider = ({ children }) => {
       const parsedUser = JSON.parse(storedUser);
       setUser(parsedUser);
       setToken(storedToken);
-      
-      // Set default header for all subsequent axios requests
-      axios.defaults.headers.common['Authorization'] = `Bearer ${storedToken}`;
     }
     setLoading(false);
   }, []);
@@ -34,9 +30,6 @@ export const AuthProvider = ({ children }) => {
     setToken(tokenData);
     localStorage.setItem('user', JSON.stringify(userData));
     localStorage.setItem('token', tokenData);
-    
-    // Set axios authorization header
-    axios.defaults.headers.common['Authorization'] = `Bearer ${tokenData}`;
   };
 
   // 3. Logout function: Clears user details from state and local storage
@@ -45,9 +38,6 @@ export const AuthProvider = ({ children }) => {
     setToken(null);
     localStorage.removeItem('user');
     localStorage.removeItem('token');
-    
-    // Remove axios authorization header
-    delete axios.defaults.headers.common['Authorization'];
   };
 
   return (
