@@ -2,9 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
 import connectDB from './config/db.js';
-import authRoutes from './routes/authRoutes.js';
-import urlRoutes from './routes/urlRoutes.js';
-import aiRoutes from './routes/aiRoutes.js';
+import apiRoutes from './routes/index.js';
 import { redirectToOriginal, getUrlStats } from './controllers/urlController.js';
 
 // Load environment variables
@@ -24,9 +22,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/auth', authRoutes);
-app.use('/urls', urlRoutes);
-app.use('/ai', aiRoutes);
+app.use('/', apiRoutes);
 
 // Public Stats Page Route
 app.get('/stats/:shortCode', getUrlStats);
