@@ -28,6 +28,9 @@ function Dashboard() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editUrlValue, setEditUrlValue] = useState('');
+  const [activeQrUrl, setActiveQrUrl] = useState(null);
+  const [activeQrCode, setActiveQrCode] = useState('');
+  const [loadingQrId, setLoadingQrId] = useState(null);
 
   // 1. React Query: Fetch URLs
   const { data: urlData, isLoading, isError, refetch } = useQuery({
@@ -148,6 +151,23 @@ function Dashboard() {
       return;
     }
     editMutation.mutate({ id, originalUrl: editUrlValue });
+  };
+
+  // QR Code Fetching handler
+  const handleViewQr = async (id, code) => {
+    setLoadingQrId(id);
+    try {
+      const response = await axios.get(`${API_URL}/urls/${id}/qrcode`);
+      if (response.data.status === 'success') {
+        setActiveQrUrl(response.data.data.qrCodeDataUrl);
+        setActiveQrCode(response.data.data.shortUrl);
+      }
+    } catch (error) {
+      console.error('QR Code Generation Error:', error);
+      toast.error('Failed to generate QR Code');
+    } finally {
+      setLoadingQrId(null);
+    }
   };
 
   return (
@@ -395,12 +415,18 @@ function Dashboard() {
                           <ExternalLink className="w-4 h-4" />
                         </a>
 
-                        {/* QR Code Placeholder Button */}
+                        {/* QR Code Button */}
                         <button
-                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
+                          onClick={() => handleViewQr(url._id, url.shortCode)}
+                          disabled={loadingQrId === url._id}
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition disabled:opacity-50"
                           title="Generate QR Code"
                         >
-                          <QrCode className="w-4 h-4" />
+                          {loadingQrId === url._id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
+                          ) : (
+                            <QrCode className="w-4 h-4" />
+                          )}
                         </button>
 
                         {/* Edit Link Button */}
@@ -461,6 +487,45 @@ function Dashboard() {
         </section>
 
       </main>
+
+      {/* QR Code Modal Overlay */}
+      {activeQrUrl && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl max-w-xs w-full text-center space-y-5 shadow-2xl relative animate-scaleIn">
+            <h3 className="text-md font-bold text-white tracking-wide">QR Code</h3>
+            
+            {/* White background card containing QR Code Image */}
+            <div className="bg-white p-3.5 rounded-xl inline-block mx-auto">
+              <img src={activeQrUrl} alt="Short URL QR Code" className="w-40 h-40 mx-auto" />
+            </div>
+            
+            <p className="text-[10px] text-slate-400 break-all select-all font-mono font-medium p-2 bg-slate-950 border border-slate-850 rounded-xl">
+              {activeQrCode}
+            </p>
+            
+            <div className="flex space-x-2.5">
+               <button
+                 onClick={() => {
+                   const link = document.createElement('a');
+                   link.href = activeQrUrl;
+                   link.download = `qrcode-${activeQrCode.split('/').pop()}.png`;
+                   link.click();
+                 }}
+                 className="flex-grow py-2 bg-violet-600 hover:bg-violet-500 hover:shadow-[0_0_15px_rgba(139,92,246,0.25)] text-white rounded-xl text-xs font-semibold transition"
+               >
+                 Download
+               </button>
+               <button
+                 onClick={() => { setActiveQrUrl(null); setActiveQrCode(''); }}
+                 className="flex-grow py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700"
+               >
+                 Close
+               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
