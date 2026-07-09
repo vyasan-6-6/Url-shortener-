@@ -1,0 +1,13 @@
+import express from 'express';
+import { createShortUrl, getUserUrls } from '../controllers/urlController.js';
+import { protect } from '../middlewares/authMiddleware.js';
+
+const router = express.Router();
+
+// All URL endpoints are private and require JWT authentication
+router.use(protect); // Applies the 'protect' middleware to all routes defined below
+
+router.post('/', createShortUrl);
+router.get('/', getUserUrls);
+
+export default router;
