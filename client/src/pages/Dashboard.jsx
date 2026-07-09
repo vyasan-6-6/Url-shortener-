@@ -1,9 +1,101 @@
-import React from 'react';
+import React, { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import axios from 'axios';
 import { useAuth } from '../context/AuthContext';
-import { LogOut, Link2, PlusCircle, ExternalLink, BarChart3, Clock, Trash2, Edit2, QrCode } from 'lucide-react';
+import { toast } from 'react-hot-toast';
+import { 
+  LogOut, Link2, PlusCircle, ExternalLink, BarChart3, 
+  Clock, Trash2, Edit2, QrCode, Search, Copy, Check, 
+  ChevronLeft, ChevronRight, Calendar, Loader2 
+} from 'lucide-react';
 
 function Dashboard() {
-  const { user, logout } = useAuth();
+  const { user, logout, API_URL } = useAuth();
+  const queryClient = useQueryClient();
+
+  // Search & Pagination States
+  const [search, setSearch] = useState('');
+  const [page, setPage] = useState(1);
+  const [limit] = useState(6);
+
+  // Form Inputs
+  const [originalUrl, setOriginalUrl] = useState('');
+  const [customAlias, setCustomAlias] = useState('');
+  const [expiresAt, setExpiresAt] = useState('');
+
+  // UI States
+  const [copiedCode, setCopiedCode] = useState('');
+  const [showAdvanced, setShowAdvanced] = useState(false);
+
+  // 1. React Query: Fetch URLs
+  const { data: urlData, isLoading, isError, refetch } = useQuery({
+    queryKey: ['urls', page, search],
+    queryFn: async () => {
+      const response = await axios.get(`${API_URL}/urls`, {
+        params: { page, limit, search }
+      });
+      return response.data;
+    },
+    keepPreviousData: true
+  });
+
+  // 2. React Query: Create URL Mutation
+  const createMutation = useMutation({
+    mutationFn: async (newUrlData) => {
+      const response = await axios.post(`${API_URL}/urls`, newUrlData);
+      return response.data;
+    },
+    onSuccess: () => {
+      toast.success('Short URL created successfully!');
+      setOriginalUrl('');
+      setCustomAlias('');
+      setExpiresAt('');
+      queryClient.invalidateQueries(['urls']); // Auto-refresh URL list
+    },
+    onError: (error) => {
+      const errMsg = error.response?.data?.message || 'Failed to create short URL';
+      toast.error(errMsg);
+    }
+  });
+
+  const handleShortenSubmit = (e) => {
+    e.preventDefault();
+    if (!originalUrl) {
+      toast.error('Please enter a destination URL');
+      return;
+    }
+    createMutation.mutate({
+      originalUrl,
+      customAlias: customAlias || undefined,
+      expiresAt: expiresAt || undefined
+    });
+  };
+
+  // Copy Short URL to clipboard utility
+  const handleCopy = (code) => {
+    const shortUrl = `${API_URL}/${code}`;
+    navigator.clipboard.writeText(shortUrl);
+    setCopiedCode(code);
+    toast.success('Copied short URL to clipboard!');
+    setTimeout(() => setCopiedCode(''), 2000);
+  };
+
+  // Format date safely for display
+  const formatDate = (dateString) => {
+    if (!dateString) return 'Never';
+    const date = new Date(dateString);
+    return date.toLocaleDateString(undefined, {
+      year: 'numeric',
+      month: 'short',
+      day: 'numeric'
+    });
+  };
+
+  // Check if link is expired
+  const isExpired = (expiresAtString) => {
+    if (!expiresAtString) return false;
+    return new Date(expiresAtString) < new Date();
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -15,7 +107,7 @@ function Dashboard() {
               <Link2 className="w-5 h-5 text-violet-400" />
             </div>
             <span className="font-extrabold text-xl bg-gradient-to-r from-violet-400 to-fuchsia-400 bg-clip-text text-transparent">
-              ShortCut
+              ShortCut Pro
             </span>
           </div>
 
@@ -35,70 +127,255 @@ function Dashboard() {
         </div>
       </header>
 
-      {/* Dashboard Main Area */}
+      {/* Main Dashboard Area */}
       <main className="max-w-6xl w-full mx-auto px-4 py-8 flex-grow space-y-8">
         
-        {/* Metric Cards Row */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center space-x-4">
-            <div className="p-3 bg-violet-500/15 text-violet-400 rounded-xl">
-              <Link2 className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Total Links</div>
-              <div className="text-2xl font-bold text-white mt-1">0</div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center space-x-4">
-            <div className="p-3 bg-fuchsia-500/15 text-fuchsia-400 rounded-xl">
-              <BarChart3 className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Total Clicks</div>
-              <div className="text-2xl font-bold text-white mt-1">0</div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-6 flex items-center space-x-4">
-            <div className="p-3 bg-emerald-500/15 text-emerald-400 rounded-xl">
-              <PlusCircle className="w-6 h-6" />
-            </div>
-            <div>
-              <div className="text-xs text-slate-400 font-semibold tracking-wider uppercase">Active Links</div>
-              <div className="text-2xl font-bold text-white mt-1">0</div>
-            </div>
-          </div>
-        </div>
-
-        {/* URL Creation Form */}
+        {/* Simple URL Creation Form */}
         <section className="bg-slate-900 border border-slate-800 rounded-2xl p-6 md:p-8 shadow-xl">
-          <h2 className="text-xl font-bold text-white mb-4">Shorten a new URL</h2>
-          <div className="flex flex-col sm:flex-row gap-4">
-            <input
-              type="text"
-              placeholder="Paste your long URL here..."
-              className="flex-grow bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-3 px-4 text-sm transition"
-            />
-            <button className="px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-xl text-sm font-semibold transition duration-150 shadow-lg shadow-violet-500/25 flex items-center justify-center space-x-2">
-              <PlusCircle className="w-4 h-4" />
-              <span>Shorten</span>
-            </button>
-          </div>
+          <h2 className="text-xl font-bold text-white mb-4">Shorten a new link</h2>
+          
+          <form onSubmit={handleShortenSubmit} className="space-y-4">
+            <div className="flex flex-col sm:flex-row gap-4">
+              <div className="relative flex-grow">
+                <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                  <Link2 className="w-4 h-4" />
+                </span>
+                <input
+                  type="text"
+                  placeholder="Paste your long URL here (e.g. https://google.com)..."
+                  value={originalUrl}
+                  onChange={(e) => setOriginalUrl(e.target.value)}
+                  className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-3 pl-10 pr-4 text-sm transition text-slate-100 placeholder-slate-650"
+                />
+              </div>
+              <button
+                type="submit"
+                disabled={createMutation.isLoading}
+                className="px-6 py-3 bg-gradient-to-r from-violet-600 to-fuchsia-600 hover:from-violet-500 hover:to-fuchsia-500 text-white rounded-xl text-sm font-semibold transition duration-150 shadow-lg shadow-violet-500/25 flex items-center justify-center space-x-2 disabled:opacity-50"
+              >
+                {createMutation.isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Shortening...</span>
+                  </>
+                ) : (
+                  <>
+                    <PlusCircle className="w-4 h-4" />
+                    <span>Shorten URL</span>
+                  </>
+                )}
+              </button>
+            </div>
+
+            {/* Toggle Advanced Inputs */}
+            <div>
+              <button
+                type="button"
+                onClick={() => setShowAdvanced(!showAdvanced)}
+                className="text-xs text-violet-400 hover:text-violet-300 font-semibold transition focus:outline-none"
+              >
+                {showAdvanced ? 'Hide Advanced Options' : 'Show Advanced Options (Custom Alias / Expiration)'}
+              </button>
+            </div>
+
+            {/* Advanced Inputs Container */}
+            {showAdvanced && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-2 border-t border-slate-800/50 animate-fadeIn">
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-350">Custom Alias (Optional)</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. my-portfolio"
+                    value={customAlias}
+                    onChange={(e) => setCustomAlias(e.target.value)}
+                    className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 px-3.5 text-xs text-slate-100"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-xs font-semibold text-slate-350">Expiration Date (Optional)</label>
+                  <div className="relative">
+                    <input
+                      type="datetime-local"
+                      value={expiresAt}
+                      onChange={(e) => setExpiresAt(e.target.value)}
+                      className="w-full bg-slate-950 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 px-3.5 text-xs text-slate-100 text-left"
+                    />
+                  </div>
+                </div>
+              </div>
+            )}
+          </form>
         </section>
 
-        {/* URL List */}
+        {/* Live Search and URL List */}
         <section className="space-y-4">
-          <div className="flex items-center justify-between">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <h2 className="text-xl font-bold text-white">Your Shortened Links</h2>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl divide-y divide-slate-800 overflow-hidden">
-            <div className="p-8 text-center text-slate-400">
-              <Clock className="w-12 h-12 text-slate-600 mx-auto mb-3" />
-              <p className="text-sm">You haven't shortened any links yet. Start by creating one above!</p>
+            
+            {/* Live Search Field */}
+            <div className="relative w-full sm:w-64">
+              <span className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-500">
+                <Search className="w-4 h-4" />
+              </span>
+              <input
+                type="text"
+                placeholder="Search links..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1); // Reset page to 1 when searching
+                }}
+                className="w-full bg-slate-900 border border-slate-800 focus:border-violet-500 focus:outline-none rounded-xl py-2 pl-9 pr-4 text-xs transition text-slate-100 placeholder-slate-600"
+              />
             </div>
           </div>
+
+          {/* Table List Container */}
+          {isLoading ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              <Loader2 className="w-8 h-8 animate-spin text-violet-500 mx-auto mb-2" />
+              <p className="text-sm">Fetching your links...</p>
+            </div>
+          ) : isError ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 text-center text-red-400">
+              <p className="text-sm">Failed to load links from the server.</p>
+            </div>
+          ) : urlData?.data?.length === 0 ? (
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-12 text-center text-slate-400">
+              <Clock className="w-10 h-10 text-slate-750 mx-auto mb-3" />
+              <p className="text-sm">No links found matching your criteria.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="bg-slate-900 border border-slate-800 rounded-2xl divide-y divide-slate-800 overflow-hidden shadow-xl">
+                
+                {urlData.data.map((url) => {
+                  const expired = isExpired(url.expiresAt);
+                  
+                  return (
+                    <div key={url._id} className="p-4 md:p-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 hover:bg-slate-850/30 transition">
+                      {/* Left Block: URLs and Metadata */}
+                      <div className="space-y-2 flex-grow min-w-0 max-w-full">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <span className="font-bold text-white text-md tracking-wide">
+                            /{url.shortCode}
+                          </span>
+                          
+                          {/* Expiration Tag */}
+                          {url.expiresAt && (
+                            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full ${
+                              expired 
+                                ? 'bg-red-950/40 text-red-400 border border-red-900/40' 
+                                : 'bg-violet-950/40 text-violet-400 border border-violet-900/40'
+                            }`}>
+                              {expired ? 'Expired' : `Expires: ${formatDate(url.expiresAt)}`}
+                            </span>
+                          )}
+                        </div>
+                        
+                        <p className="text-xs text-slate-450 truncate" title={url.originalUrl}>
+                          {url.originalUrl}
+                        </p>
+
+                        <div className="flex items-center space-x-4 text-[10px] text-slate-500 font-medium">
+                          <span className="flex items-center">
+                            <Clock className="w-3 h-3 mr-1" />
+                            Created: {formatDate(url.createdAt)}
+                          </span>
+                          <span className="flex items-center text-slate-400">
+                            <BarChart3 className="w-3 h-3 mr-1 text-fuchsia-400" />
+                            Clicks: {url.clicks}
+                          </span>
+                        </div>
+                      </div>
+
+                      {/* Right Block: Action Buttons */}
+                      <div className="flex items-center space-x-2 w-full md:w-auto justify-end">
+                        
+                        {/* Copy Link Button */}
+                        <button
+                          onClick={() => handleCopy(url.shortCode)}
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
+                          title="Copy Link"
+                        >
+                          {copiedCode === url.shortCode ? (
+                            <Check className="w-4 h-4 text-emerald-400" />
+                          ) : (
+                            <Copy className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        {/* Open Original Link */}
+                        <a
+                          href={`${API_URL}/${url.shortCode}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
+                          title="Visit Link"
+                        >
+                          <ExternalLink className="w-4 h-4" />
+                        </a>
+
+                        {/* QR Code Placeholder Button */}
+                        <button
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
+                          title="Generate QR Code"
+                        >
+                          <QrCode className="w-4 h-4" />
+                        </button>
+
+                        {/* Edit Link Button */}
+                        <button
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-400 hover:text-white border border-slate-850 rounded-lg transition"
+                          title="Edit Link"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+
+                        {/* Delete Link Button */}
+                        <button
+                          className="p-2 bg-red-950/20 hover:bg-red-900/35 border border-red-900/30 text-red-400 hover:text-red-300 rounded-lg transition"
+                          title="Delete Link"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                    </div>
+                  );
+                })}
+
+              </div>
+
+              {/* Pagination Row */}
+              {urlData?.pagination?.totalPages > 1 && (
+                <div className="flex items-center justify-between border-t border-slate-900 pt-4">
+                  <div className="text-xs text-slate-400">
+                    Showing page <span className="font-semibold text-slate-200">{page}</span> of{' '}
+                    <span className="font-semibold text-slate-200">
+                      {urlData.pagination.totalPages}
+                    </span>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      onClick={() => setPage((p) => Math.max(p - 1, 1))}
+                      disabled={page === 1}
+                      className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronLeft className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => setPage((p) => Math.min(p + 1, urlData.pagination.totalPages))}
+                      disabled={page === urlData.pagination.totalPages}
+                      className="p-2 bg-slate-900 hover:bg-slate-800 border border-slate-800 text-slate-400 hover:text-white rounded-lg transition disabled:opacity-40 disabled:cursor-not-allowed"
+                    >
+                      <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
         </section>
 
       </main>
