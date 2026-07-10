@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api/axios';
 import { toast } from 'react-hot-toast';
 import { Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { loginSchema } from '../utils/validationRules';
+import { login as loginService } from '../services/authService';
 
 function Login() {
   const { user, login } = useAuth();
@@ -32,13 +32,10 @@ function Login() {
   const onSubmit = async (data) => {
     setSubmitting(true);
     try {
-      const response = await api.post('/auth/login', {
-        email: data.email,
-        password: data.password
-      });
+      const resData = await loginService(data.email, data.password);
 
-      if (response.data.status === 'success') {
-        const { user, token } = response.data.data;
+      if (resData.status === 'success') {
+        const { user, token } = resData.data;
         login(user, token);
         toast.success(`Welcome back, ${user.name}!`);
         navigate('/');

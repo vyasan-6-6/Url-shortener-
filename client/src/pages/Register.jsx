@@ -1,12 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { Link, useNavigate } from 'react-router-dom';
-import api from '../api/axios';
 import { toast } from 'react-hot-toast';
 import { User, Mail, Lock, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
 import { yupResolver } from '@hookform/resolvers/yup';
 import { registerSchema } from '../utils/validationRules';
+import { register as registerService } from '../services/authService';
 
 function Register() {
   const { user, login } = useAuth();
@@ -32,14 +32,10 @@ function Register() {
   const onSubmit = async (data) => {
     setSubmitting(true);
     try {
-      const response = await api.post('/auth/register', {
-        name: data.name,
-        email: data.email,
-        password: data.password
-      });
+      const resData = await registerService(data.name, data.email, data.password);
 
-      if (response.data.status === 'success') {
-        const { user, token } = response.data.data;
+      if (resData.status === 'success') {
+        const { user, token } = resData.data;
         login(user, token);
         toast.success(`Welcome, ${user.name}! Account created successfully.`);
         navigate('/');
