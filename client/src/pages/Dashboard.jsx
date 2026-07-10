@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import api from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { toast } from 'react-hot-toast';
+import { useQrCode } from '../hooks/useQrCode';
+import { useAiFeatures } from '../hooks/useAiFeatures';
+import { useAnalytics } from '../hooks/useAnalytics';
 import { 
   LogOut, Link2, PlusCircle, ExternalLink, BarChart3, 
   Clock, Trash2, Edit2, QrCode, Search, Copy, Check, 
@@ -28,19 +31,34 @@ function Dashboard() {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [editUrlValue, setEditUrlValue] = useState('');
-  const [activeQrUrl, setActiveQrUrl] = useState(null);
-  const [activeQrCode, setActiveQrCode] = useState('');
-  const [loadingQrId, setLoadingQrId] = useState(null);
-  const [aiSuggestions, setAiSuggestions] = useState([]);
-  const [generatingAliases, setGeneratingAliases] = useState(false);
-  const [activeInsightsText, setActiveInsightsText] = useState('');
-  const [activeInsightsCode, setActiveInsightsCode] = useState('');
-  const [loadingInsightsId, setLoadingInsightsId] = useState(null);
+  // Consolidated local states and operations using Custom Hooks
+  const {
+    activeQrUrl,
+    activeQrCode,
+    loadingQrId,
+    handleViewQr,
+    closeQr
+  } = useQrCode();
 
-  // Analytics Stats States
-  const [activeStatsData, setActiveStatsData] = useState(null);
-  const [activeStatsCode, setActiveStatsCode] = useState('');
-  const [loadingStatsId, setLoadingStatsId] = useState(null);
+  const {
+    aiSuggestions,
+    generatingAliases,
+    activeInsightsText,
+    activeInsightsCode,
+    loadingInsightsId,
+    handleGenerateAiAliases,
+    handleViewInsights,
+    closeInsights,
+    clearSuggestions
+  } = useAiFeatures();
+
+  const {
+    activeStatsData,
+    activeStatsCode,
+    loadingStatsId,
+    handleViewStats,
+    closeStats
+  } = useAnalytics();
 
   // 1. React Query: Fetch URLs
   const { data: urlData, isLoading, isError, refetch } = useQuery({
@@ -194,82 +212,7 @@ function Dashboard() {
     editMutation.mutate({ id, originalUrl: editUrlValue });
   };
 
-  // QR Code Fetching handler
-  const handleViewQr = async (id, code) => {
-    setLoadingQrId(id);
-    try {
-      const response = await api.get(`/urls/${id}/qrcode`);
-      if (response.data.status === 'success') {
-        setActiveQrUrl(response.data.data.qrCodeDataUrl);
-        setActiveQrCode(response.data.data.shortUrl);
-      }
-    } catch (error) {
-      console.error('QR Code Generation Error:', error);
-      toast.error('Failed to generate QR Code');
-    } finally {
-      setLoadingQrId(null);
-    }
-  };
 
-  // AI Alias Suggestion handler
-  const handleGenerateAiAliases = async () => {
-    if (!originalUrl) {
-      toast.error('Please enter a destination URL first');
-      return;
-    }
-    setGeneratingAliases(true);
-    setAiSuggestions([]);
-    try {
-      const response = await api.post('/ai/aliases', { originalUrl });
-      if (response.data.status === 'success') {
-        setAiSuggestions(response.data.data);
-        toast.success('AI suggestions loaded!');
-      }
-    } catch (error) {
-      console.error('AI alias error:', error);
-      toast.error('Failed to generate AI alias suggestions');
-    } finally {
-      setGeneratingAliases(false);
-    }
-  };
-
-  // AI Analytics Insights fetching handler
-  const handleViewInsights = async (id, code) => {
-    setLoadingInsightsId(id);
-    setActiveInsightsText('');
-    try {
-      const response = await api.post('/ai/insights', { urlId: id });
-      if (response.data.status === 'success') {
-        setActiveInsightsText(response.data.data);
-        setActiveInsightsCode(code);
-        toast.success('AI insights generated!');
-      }
-    } catch (error) {
-      console.error('Insights generation error:', error);
-      const errMsg = error.response?.data?.message || 'Failed to generate AI analytics insights';
-      toast.error(errMsg);
-    } finally {
-      setLoadingInsightsId(null);
-    }
-  };
-
-  // Analytics Stats fetching handler
-  const handleViewStats = async (id, code) => {
-    setLoadingStatsId(id);
-    setActiveStatsData(null);
-    try {
-      const response = await api.get(`/stats/${code}`);
-      if (response.data.status === 'success') {
-        setActiveStatsData(response.data.data);
-        setActiveStatsCode(code);
-      }
-    } catch (error) {
-      console.error('Stats loading error:', error);
-      toast.error('Failed to load traffic analytics statistics');
-    } finally {
-      setLoadingStatsId(null);
-    }
-  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
@@ -360,7 +303,7 @@ function Dashboard() {
                     <label className="text-xs font-semibold text-slate-350">Custom Alias (Optional)</label>
                     <button
                       type="button"
-                      onClick={handleGenerateAiAliases}
+                      onClick={() => handleGenerateAiAliases(originalUrl)}
                       disabled={generatingAliases || !originalUrl}
                       className="text-[10px] text-violet-400 hover:text-violet-300 font-semibold transition disabled:opacity-40 cursor-pointer"
                     >
@@ -382,7 +325,7 @@ function Dashboard() {
                           type="button"
                           onClick={() => {
                             setCustomAlias(sug);
-                            setAiSuggestions([]);
+                            clearSuggestions();
                           }}
                           className="text-[9px] bg-violet-950/40 hover:bg-violet-900/60 border border-violet-900/50 text-violet-300 px-2 py-0.5 rounded-full transition cursor-pointer"
                         >
@@ -672,7 +615,7 @@ function Dashboard() {
             
             <div className="flex justify-end pt-2">
               <button
-                onClick={() => { setActiveInsightsText(''); setActiveInsightsCode(''); }}
+                onClick={closeInsights}
                 className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700 w-full sm:w-auto cursor-pointer"
               >
                 Close Insights
@@ -710,7 +653,7 @@ function Dashboard() {
                  Download
                </button>
                <button
-                 onClick={() => { setActiveQrUrl(null); setActiveQrCode(''); }}
+                 onClick={closeQr}
                  className="flex-grow py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700"
                >
                  Close
@@ -850,7 +793,7 @@ function Dashboard() {
             {/* Modal Actions */}
             <div className="flex justify-end pt-1">
               <button
-                onClick={() => { setActiveStatsData(null); setActiveStatsCode(''); }}
+                onClick={closeStats}
                 className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700 w-full cursor-pointer"
               >
                 Close Analytics Dashboard
