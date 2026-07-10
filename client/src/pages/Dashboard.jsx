@@ -37,6 +37,11 @@ function Dashboard() {
   const [activeInsightsCode, setActiveInsightsCode] = useState('');
   const [loadingInsightsId, setLoadingInsightsId] = useState(null);
 
+  // Analytics Stats States
+  const [activeStatsData, setActiveStatsData] = useState(null);
+  const [activeStatsCode, setActiveStatsCode] = useState('');
+  const [loadingStatsId, setLoadingStatsId] = useState(null);
+
   // 1. React Query: Fetch URLs
   const { data: urlData, isLoading, isError, refetch } = useQuery({
     queryKey: ['urls', page, search],
@@ -245,6 +250,24 @@ function Dashboard() {
       toast.error(errMsg);
     } finally {
       setLoadingInsightsId(null);
+    }
+  };
+
+  // Analytics Stats fetching handler
+  const handleViewStats = async (id, code) => {
+    setLoadingStatsId(id);
+    setActiveStatsData(null);
+    try {
+      const response = await api.get(`/stats/${code}`);
+      if (response.data.status === 'success') {
+        setActiveStatsData(response.data.data);
+        setActiveStatsCode(code);
+      }
+    } catch (error) {
+      console.error('Stats loading error:', error);
+      toast.error('Failed to load traffic analytics statistics');
+    } finally {
+      setLoadingStatsId(null);
     }
   };
 
@@ -488,10 +511,15 @@ function Dashboard() {
                             <Clock className="w-3 h-3 mr-1" />
                             Created: {formatDate(url.createdAt)}
                           </span>
-                          <span className="flex items-center text-slate-400">
-                            <BarChart3 className="w-3 h-3 mr-1 text-fuchsia-400" />
+                          <button
+                            type="button"
+                            onClick={() => handleViewStats(url._id, url.shortCode)}
+                            className="flex items-center text-slate-450 hover:text-fuchsia-400 transition cursor-pointer"
+                            title="View Analytics"
+                          >
+                            <BarChart3 className="w-3 h-3 mr-1 text-fuchsia-450" />
                             Clicks: {url.clicks}
-                          </span>
+                          </button>
                         </div>
                       </div>
 
@@ -533,6 +561,20 @@ function Dashboard() {
                             <Loader2 className="w-4 h-4 animate-spin text-violet-400" />
                           ) : (
                             <QrCode className="w-4 h-4" />
+                          )}
+                        </button>
+
+                        {/* Analytics Stats Button */}
+                        <button
+                          onClick={() => handleViewStats(url._id, url.shortCode)}
+                          disabled={loadingStatsId === url._id}
+                          className="p-2 bg-slate-950 hover:bg-slate-800 text-slate-450 hover:text-white border border-slate-850 rounded-lg transition disabled:opacity-50 animate-pulse-slow"
+                          title="View Traffic Analytics"
+                        >
+                          {loadingStatsId === url._id ? (
+                            <Loader2 className="w-4 h-4 animate-spin text-fuchsia-450" />
+                          ) : (
+                            <BarChart3 className="w-4 h-4 text-fuchsia-450 hover:text-fuchsia-350" />
                           )}
                         </button>
 
@@ -669,10 +711,150 @@ function Dashboard() {
                </button>
                <button
                  onClick={() => { setActiveQrUrl(null); setActiveQrCode(''); }}
-                 className="flex-grow py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700"
+                 className="flex-grow py-2 bg-slate-800 hover:bg-slate-700 text-slate-350 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700"
                >
                  Close
                </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Analytics Stats Modal Overlay */}
+      {activeStatsData && (
+        <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-slate-900 border border-slate-850 p-6 rounded-2xl max-w-lg w-full space-y-6 shadow-2xl relative animate-scaleIn max-h-[90vh] overflow-y-auto">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-2.5">
+                <div className="p-2 bg-fuchsia-500/15 rounded-lg text-fuchsia-400">
+                  <BarChart3 className="w-5 h-5 text-fuchsia-450 animate-pulse" />
+                </div>
+                <div>
+                  <h3 className="text-md font-bold text-white tracking-wide">Link Analytics</h3>
+                  <p className="text-[10px] text-slate-450 font-bold uppercase tracking-wider mt-0.5">
+                    Short Link: <span className="text-slate-200 font-mono text-[11px]">/{activeStatsCode}</span>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => { setActiveStatsData(null); setActiveStatsCode(''); }}
+                className="text-xs text-slate-400 hover:text-white font-semibold transition cursor-pointer"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Overall Count cards */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="bg-slate-950 border border-slate-850/60 p-4 rounded-xl text-center shadow-inner">
+                <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-1">Total Clicks</span>
+                <span className="text-2xl font-extrabold text-white">{activeStatsData.clicksCount}</span>
+              </div>
+              <div className="bg-slate-950 border border-slate-850/60 p-4 rounded-xl text-center shadow-inner">
+                <span className="text-[10px] text-slate-450 font-bold uppercase tracking-wider block mb-1">Last Accessed</span>
+                <span className="text-xs font-semibold text-slate-200 block truncate mt-1.5">
+                  {activeStatsData.lastAccessed ? formatDate(activeStatsData.lastAccessed) : 'Never'}
+                </span>
+              </div>
+            </div>
+
+            {/* Browsers & Referrers Breakdown Grid */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              
+              {/* Browsers card */}
+              <div className="bg-slate-950 border border-slate-850/60 p-4.5 rounded-xl space-y-3.5">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">Browser Share</span>
+                {activeStatsData.browsers.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 text-center py-4">No browser logs recorded yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {activeStatsData.browsers.map((b, idx) => {
+                      const percentage = activeStatsData.clicksCount > 0 
+                        ? Math.round((b.count / activeStatsData.clicksCount) * 100) 
+                        : 0;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-medium text-slate-350">
+                            <span>{b.browser}</span>
+                            <span className="text-slate-450 font-bold">{b.count} ({percentage}%)</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-violet-600 to-violet-500 rounded-full"
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {/* Referrers card */}
+              <div className="bg-slate-950 border border-slate-850/60 p-4.5 rounded-xl space-y-3.5">
+                <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">Referrer Sources</span>
+                {activeStatsData.referrers.length === 0 ? (
+                  <p className="text-[11px] text-slate-500 text-center py-4">No referrer logs recorded yet</p>
+                ) : (
+                  <div className="space-y-3">
+                    {activeStatsData.referrers.map((r, idx) => {
+                      const percentage = activeStatsData.clicksCount > 0 
+                        ? Math.round((r.count / activeStatsData.clicksCount) * 100) 
+                        : 0;
+                      return (
+                        <div key={idx} className="space-y-1">
+                          <div className="flex justify-between text-[11px] font-medium text-slate-350">
+                            <span>{r.referrer}</span>
+                            <span className="text-slate-450 font-bold">{r.count} ({percentage}%)</span>
+                          </div>
+                          <div className="h-1.5 bg-slate-900 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-gradient-to-r from-fuchsia-600 to-fuchsia-500 rounded-full"
+                              style={{ width: `${percentage}%` }}
+                            ></div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Recent Activity Log list */}
+            <div className="bg-slate-950 border border-slate-850/60 p-4.5 rounded-xl space-y-3">
+              <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider block border-b border-slate-900 pb-1.5">Recent Clicks Activity Feed</span>
+              {activeStatsData.recentActivity.length === 0 ? (
+                <p className="text-[11px] text-slate-500 text-center py-4">No activity logged yet</p>
+              ) : (
+                <div className="space-y-2 max-h-40 overflow-y-auto divide-y divide-slate-900/60 pr-1">
+                  {activeStatsData.recentActivity.map((log, idx) => (
+                    <div key={idx} className="flex justify-between items-center text-[10px] text-slate-350 pt-2 first:pt-0">
+                      <div>
+                        <span className="font-semibold text-slate-200">{log.browser}</span>
+                        <span className="text-slate-500 ml-1.5">({log.ip})</span>
+                      </div>
+                      <div className="text-right flex items-center space-x-2">
+                        <span className="bg-slate-900 px-1.5 py-0.5 rounded border border-slate-800 text-slate-400">{log.referrer}</span>
+                        <span className="text-slate-500">{new Date(log.clickedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Modal Actions */}
+            <div className="flex justify-end pt-1">
+              <button
+                onClick={() => { setActiveStatsData(null); setActiveStatsCode(''); }}
+                className="px-5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white rounded-xl text-xs font-semibold transition border border-slate-700 w-full cursor-pointer"
+              >
+                Close Analytics Dashboard
+              </button>
             </div>
           </div>
         </div>
